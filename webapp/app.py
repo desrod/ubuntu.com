@@ -53,6 +53,7 @@ from webapp.shop.cube.views import (
     cred_cancel_exam,
     cred_assessments,
     cred_exam,
+    cred_provision,
 )
 
 from webapp.views import (
@@ -912,6 +913,11 @@ app.add_url_rule("/credentials/your-exams", view_func=cred_your_exams)
 app.add_url_rule("/credentials/cancel-exam", view_func=cred_cancel_exam)
 app.add_url_rule("/credentials/assessments", view_func=cred_assessments)
 app.add_url_rule("/credentials/exam", view_func=cred_exam)
+app.add_url_rule(
+    "/credentials/provision",
+    view_func=cred_provision,
+    methods=["GET", "POST"],
+)
 
 # Charmed OpenStack docs
 openstack_docs = Docs(

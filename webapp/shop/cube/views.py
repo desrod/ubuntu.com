@@ -136,7 +136,8 @@ def cred_your_exams(
     **kwargs,
 ):
     sso_user_email = user_info(flask.session)["email"]
-    ability_screen_id = 4190
+    #  ability_screen_id = 4190
+    ability_screen_id = 4194
     response = trueability_api.paginate(
         trueability_api.get_assessment_reservations,
         "assessment_reservations",
@@ -266,8 +267,13 @@ def cred_assessments(
     for r in response["assessments"]:
         user_email = r.get("user", {}).get("email")
 
-        if user_email != sso_user_email:
+        # TODO: DO NOT COMMIT
+        #  if user_email != sso_user_email:
+        #      continue
+        if r.get("state") in ["finalized"]:
             continue
+
+        print("!!! assessment", json.dumps(r, indent=4))
 
         name = r["ability_screen"]["name"]
         started_at = (
@@ -282,11 +288,14 @@ def cred_assessments(
                 "date": started_at.strftime("%d %b %Y")
                 if started_at
                 else "N/A",
-                "time": started_at.strftime("%H:%M") if started_at else "N/A",
+                "time": started_at.strftime("%I:%M %p %Z")
+                if started_at
+                else "N/A",
                 "timezone": timezone,
                 "state": r["state"],
                 "id": r["id"],
                 "uuid": r["uuid"],
+                "user_email": user_email,
             }
         )
 
@@ -313,11 +322,99 @@ def cred_exam(
     assessment_user = assessment["assessment"]["user"]["email"]
     sso_user = user_info(flask.session)["email"]
 
-    if assessment_user != sso_user:
-        return flask.abort(403)
+    # TODO: DO NOT COMMIT
+    #  if assessment_user != sso_user:
+    #      return flask.abort(403)
 
     url = trueability_api.get_assessment_redirect(assessment_id)
     return flask.render_template("credentials/exam.html", url=url)
+
+
+@shop_decorator(area="cube", permission="user", response="html")
+@canonical_staff()
+def cred_provision(
+    ua_contracts_api,
+    badgr_issuer,
+    badgr_api,
+    edx_api,
+    trueability_api,
+    badge_certification,
+    **kwargs,
+):
+    sso_user = user_info(flask.session)
+    sso_user_email = sso_user["email"]
+    print("!!! sso_user_email: ", sso_user_email)
+    ability_screen_id = 4194
+
+    if flask.request.method == "POST":
+        starts_at = datetime.utcnow() + timedelta(seconds=70)
+        first_name, last_name = sso_user["fullname"].rsplit(" ", maxsplit=1)
+        response = trueability_api.post_assessment_reservation(
+            ability_screen_id,
+            starts_at.isoformat(),
+            sso_user_email,
+            first_name,
+            last_name,
+            "UTC",
+        )
+
+        if response and "error" in response:
+            error = response["message"]
+            return flask.render_template(
+                "/credentials/provision.html", error=error
+            )
+        else:
+            return flask.render_template("/credentials/provision.html")
+
+    response = trueability_api.paginate(
+        trueability_api.get_assessments,
+        "assessments",
+        ability_screen_id=ability_screen_id,
+    )
+
+    assessment = None
+    for r in response["assessments"]:
+        print("!!! state: ", r.get("state"))
+        user_email = r.get("user", {}).get("email")
+
+        if user_email != sso_user_email:
+            continue
+
+        # TODO: Determine what to do based on assessment state
+        #  if r.get("state") not in ["created", "scheduled", "provisioning", "provisioned" "notified", "in_progress"]:
+        #  if r.get("state") in ["completed", "grading", "finalized", "canceled"]:
+        #      continue
+
+        if r.get("state") in [
+            "created",
+            "drafted",
+            "provisioning",
+            "provisioned",
+            "notifying",
+            "notified",
+            "released",
+            "in_progress",
+        ]:
+            import json
+            print("!!! assessment", json.dumps(r, indent=4))
+            assessment = r
+            break
+
+    if assessment:
+        assessment_url = f"/credentials/exam?id={ assessment['id'] }"
+        return flask.render_template(
+            "/credentials/provision.html",
+            assessment=assessment,
+            assessment_url=assessment_url,
+        )
+
+    return flask.render_template("/credentials/provision.html")
+
+    #  assessment_id = 0
+    #  r = trueability_api.get_assessment(assessment_id)
+    #  assessment_id = r.get("assessment") and r["assessment"]["id"]
+    #  url = trueability_api.get_assessment_redirect(assessment_id)
+    #  return flask.render_template("credentials/exam.html", url=url)
 
 
 @shop_decorator(area="cube", permission="user", response="json")
