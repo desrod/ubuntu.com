@@ -7,6 +7,12 @@ from urllib.parse import quote_plus
 from webapp.shop.decorators import shop_decorator, canonical_staff
 from webapp.login import user_info
 
+TIMEZONE_COUNTRIES = {
+    timezone: country
+    for country, timezones in pytz.country_timezones.items()
+    for timezone in timezones
+}
+
 
 @shop_decorator(area="cube", permission="user_or_guest", response="html")
 def cred_home(
@@ -60,11 +66,12 @@ def cred_schedule(
         ability_screen_id = 4190
         email = sso_user["email"]
         first_name, last_name = sso_user["fullname"].rsplit(" ", maxsplit=1)
+        country_code = TIMEZONE_COUNTRIES[timezone]
         response = None
 
         if "uuid" in data:
             response = trueability_api.patch_assessment_reservation(
-                starts_at.isoformat(), timezone, data["uuid"]
+                starts_at.isoformat(), timezone, country_code, data["uuid"]
             )
         else:
             response = trueability_api.post_assessment_reservation(
@@ -74,6 +81,7 @@ def cred_schedule(
                 first_name,
                 last_name,
                 timezone,
+                country_code,
             )
 
         if response and "error" in response:
@@ -136,8 +144,7 @@ def cred_your_exams(
     **kwargs,
 ):
     sso_user_email = user_info(flask.session)["email"]
-    #  ability_screen_id = 4190
-    ability_screen_id = 4194
+    ability_screen_id = 4190
     response = trueability_api.paginate(
         trueability_api.get_assessment_reservations,
         "assessment_reservations",
